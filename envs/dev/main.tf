@@ -1,4 +1,4 @@
-# Initial dev environment eks setup 
+# Initial dev environment eks setup rbu
 
 data "aws_caller_identity" "current" {}
 
