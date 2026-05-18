@@ -36,3 +36,7 @@ Thumbs.db
 # IDE
 .idea/
 .vscode/
+# Ignore Terraform executable and downloaded zip files
+terraform*.exe
+terraform*.zip
+terraform_*/
