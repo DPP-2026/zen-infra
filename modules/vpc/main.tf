@@ -32,10 +32,10 @@ resource "aws_subnet" "private_eks" {
   availability_zone = element(["us-east-1a", "us-east-1b"], count.index)
 
   tags = {
-    Name                              = "${var.project}-${var.env}-eks-private-subnet-${count.index + 1}"
-    Env                               = var.env
-    Project                           = var.project
-    "kubernetes.io/role/internal-elb" = "1"
+    Name                                                      = "${var.project}-${var.env}-eks-private-subnet-${count.index + 1}"
+    Env                                                       = var.env
+    Project                                                   = var.project
+    "kubernetes.io/role/internal-elb"                         = "1"
     "kubernetes.io/cluster/${var.project}-${var.env}-cluster" = "owned"
   }
 }
