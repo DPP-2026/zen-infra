@@ -1,4 +1,4 @@
-# Initial dev environment eks cluster setup for pharma proeject
+# Initial dev environment eks cluster setup for pharma project 1
 data "aws_caller_identity" "current" {}
 
 module "vpc" {
