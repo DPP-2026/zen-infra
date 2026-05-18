@@ -11,7 +11,9 @@
 # Sensitive variable files
 *.tfvars
 *.tfvars.json
-!example.tfvars          # allow example/template files
+# Allow non-sensitive tfvars that are safe to commit
+!example.tfvars
+!**/backend.tfvars
 
 # Crash logs
 crash.log

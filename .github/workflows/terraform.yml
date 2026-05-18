@@ -71,7 +71,7 @@ jobs:
 
       - name: Terraform Init
         id: init
-        run: terraform init
+        run: terraform init -backend-config=backend.tfvars
 
       - name: Terraform Validate
         id: validate
@@ -81,6 +81,7 @@ jobs:
         id: plan
         run: |
           terraform plan \
+            -var="aws_region=${{ env.AWS_REGION }}" \
             -var="db_password=${{ secrets.DEV_DB_PASSWORD }}" \
             -var="jwt_secret=${{ secrets.DEV_JWT_SECRET }}" \
             -var="github_org=${{ vars.GH_ORG }}" \
@@ -134,7 +135,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
-        run: terraform init
+        run: terraform init -backend-config=backend.tfvars
 
       - name: Download plan file
         uses: actions/download-artifact@v4
@@ -183,11 +184,12 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
-        run: terraform init
+        run: terraform init -backend-config=backend.tfvars
 
       - name: Terraform Destroy
         run: |
           terraform destroy \
+            -var="aws_region=${{ env.AWS_REGION }}" \
             -var="db_password=${{ secrets.DEV_DB_PASSWORD }}" \
             -var="jwt_secret=${{ secrets.DEV_JWT_SECRET }}" \
             -var="github_org=${{ vars.GH_ORG }}" \

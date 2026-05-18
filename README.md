@@ -191,7 +191,7 @@ Open Pull Request  -->  zen-infra GitHub Actions runs automatically:
     |   2. Setup Terraform 1.10.0
     |   3. Configure AWS credentials  (static IAM keys from GitHub Secrets)
     |   4. terraform fmt -check       --> fails if code is not formatted
-    |   5. terraform init             --> connects to S3 backend, downloads providers
+    |   5. terraform init -backend-config=backend.tfvars  --> connects to S3 backend
     |   6. terraform validate         --> syntax and logic check
     |   7. terraform plan             --> shows what will change (saved as artifact)
     |
@@ -280,10 +280,11 @@ zen-infra/
 │
 ├── envs/
 │   ├── dev/
-│   │   ├── backend.tf                    # S3 remote state config for dev
+│   │   ├── backend.tf                    # S3 remote state config for dev (bucket + key only)
+│   │   ├── backend.tfvars                # Backend region — passed to terraform init
 │   │   ├── providers.tf                  # AWS, Kubernetes, TLS provider config
 │   │   ├── main.tf                       # Module calls with dev-specific values
-│   │   ├── variables.tf                  # Input variable declarations
+│   │   ├── variables.tf                  # Input variable declarations (includes aws_region)
 │   │   └── outputs.tf                    # Output values (cluster name, RDS endpoint)
 │   ├── qa/                               # QA environment (structure mirrors dev)
 │   └── prod/                             # Prod environment (structure mirrors dev)
@@ -407,7 +408,9 @@ You need to update four files to point to your S3 bucket and GitHub username.
 
 ### 7.1 Update Backend Configuration
 
-Update the bucket name in all three environment backend files:
+The backend region is kept out of `backend.tf` (Terraform backend blocks do not support variables). Instead it lives in a `backend.tfvars` file that you pass to `terraform init`.
+
+**Step 1 — update the bucket name in each `backend.tf`:**
 
 **`envs/dev/backend.tf`**
 ```hcl
@@ -415,7 +418,6 @@ terraform {
   backend "s3" {
     bucket       = "zen-pharma-terraform-state-YOUR-GITHUB-USERNAME"
     key          = "envs/dev/terraform.tfstate"
-    region       = "us-east-1"
     encrypt      = true
     use_lockfile = true
   }
@@ -425,6 +427,26 @@ terraform {
 **`envs/qa/backend.tf`** — same change, key stays `envs/qa/terraform.tfstate`
 
 **`envs/prod/backend.tf`** — same change, key stays `envs/prod/terraform.tfstate`
+
+**Step 2 — verify `backend.tfvars` in each env directory:**
+
+Each environment already has a `backend.tfvars` file with the region:
+
+```hcl
+# envs/dev/backend.tfvars  (also qa/ and prod/)
+region = "us-east-1"
+```
+
+Change the value here if you deploy to a different region. This is the **single place** you need to update for the region.
+
+**Step 3 — always pass `backend.tfvars` when initialising Terraform:**
+
+```bash
+cd envs/dev
+terraform init -backend-config=backend.tfvars
+```
+
+> **Why this pattern?** Terraform's `backend` block is evaluated before any variables are loaded, so `var.aws_region` cannot be used there. The `-backend-config` flag injects the region at init time, keeping region in one place without duplicating it in the backend block.
 
 ### 7.2 Update GitHub Organisation Variable
 
@@ -448,12 +470,15 @@ In `.github/workflows/terraform.yml`, update the `github_org` value:
 - name: Terraform Plan
   run: |
     terraform plan \
+      -var="aws_region=${{ env.AWS_REGION }}" \
       -var="db_password=${{ secrets.DEV_DB_PASSWORD }}" \
       -var="jwt_secret=${{ secrets.DEV_JWT_SECRET }}" \
       -var="github_org=YOUR-GITHUB-USERNAME" \    # ← change this
       -out=tfplan \
       -no-color
 ```
+
+The `aws_region` var is sourced from the `AWS_REGION` env variable at the top of `terraform.yml` — change it there once to update the region everywhere in CI.
 
 ### 7.4 Commit and Push Changes
 
@@ -717,8 +742,9 @@ git checkout -b feature/your-change
 
 # 3. Test locally first
 cd envs/dev
-terraform init
+terraform init -backend-config=backend.tfvars
 terraform plan \
+  -var="aws_region=us-east-1" \
   -var="db_password=test" \
   -var="jwt_secret=test"
 
@@ -780,6 +806,7 @@ terraform state show module.eks.aws_eks_cluster.main
 
 # Check for drift (what changed in AWS outside Terraform)
 terraform plan \
+  -var="aws_region=us-east-1" \
   -var="db_password=dummy" \
   -var="jwt_secret=dummy"
 ```
@@ -806,8 +833,9 @@ terraform plan \
 
 ```bash
 cd envs/dev
-terraform init
+terraform init -backend-config=backend.tfvars
 terraform destroy \
+  -var="aws_region=us-east-1" \
   -var="db_password=dummy" \
   -var="jwt_secret=dummy" \
   -var="github_org=YOUR-GITHUB-USERNAME"
@@ -870,6 +898,16 @@ cd envs/dev
 terraform force-unlock <LOCK-ID>
 # Lock ID is shown in the error message
 ```
+
+### `terraform init` fails — region not configured
+
+If you see `No valid credential sources found` or a region error during init, you likely forgot the `-backend-config` flag:
+
+```bash
+terraform init -backend-config=backend.tfvars
+```
+
+The `backend.tfvars` file in each env directory holds the region. Without it, Terraform has no region for the S3 backend.
 
 ### `terraform init` fails — bucket does not exist
 

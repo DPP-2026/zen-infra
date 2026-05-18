@@ -1,3 +1,7 @@
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
@@ -14,7 +18,7 @@ resource "aws_subnet" "public" {
   count                   = length(var.public_subnet_cidrs)
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_cidrs[count.index]
-  availability_zone       = element(["us-east-1a", "us-east-1b"], count.index)
+  availability_zone       = element(data.aws_availability_zones.available.names, count.index)
   map_public_ip_on_launch = true
 
   tags = {
@@ -29,7 +33,7 @@ resource "aws_subnet" "private_eks" {
   count             = length(var.private_eks_subnet_cidrs)
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_eks_subnet_cidrs[count.index]
-  availability_zone = element(["us-east-1a", "us-east-1b"], count.index)
+  availability_zone = element(data.aws_availability_zones.available.names, count.index)
 
   tags = {
     Name                              = "${var.project}-${var.env}-eks-private-subnet-${count.index + 1}"
@@ -44,7 +48,7 @@ resource "aws_subnet" "private_rds" {
   count             = length(var.private_rds_subnet_cidrs)
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_rds_subnet_cidrs[count.index]
-  availability_zone = element(["us-east-1a", "us-east-1b"], count.index)
+  availability_zone = element(data.aws_availability_zones.available.names, count.index)
 
   tags = {
     Name    = "${var.project}-${var.env}-rds-private-subnet-${count.index + 1}"
