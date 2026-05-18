@@ -1,7 +1,8 @@
 terraform {
   backend "s3" {
-    bucket = "zen-pharma-terraform-state-dpp-2026"
-    key    = "envs/prod/terraform.tfstate"
+    bucket       = "zen-pharma-terraform-state-rameshaws360"  # Replace with your S3 bucket name
+    key          = "envs/prod/terraform.tfstate"
+    region       = "us-east-1"
     encrypt      = true
     use_lockfile = true   # S3 native locking — requires Terraform 1.10+, no DynamoDB needed
   }
