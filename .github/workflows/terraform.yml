@@ -84,7 +84,7 @@ jobs:
             -var="aws_region=${{ env.AWS_REGION }}" \
             -var="db_password=${{ secrets.DEV_DB_PASSWORD }}" \
             -var="jwt_secret=${{ secrets.DEV_JWT_SECRET }}" \
-            -var="github_org=${{ vars.github_org }}" \
+            -var="github_org=thulasi1983" \
             -out=tfplan \
             -no-color
         continue-on-error: true
