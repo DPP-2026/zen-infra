@@ -972,3 +972,30 @@ After completing this lab you have built and deployed real infrastructure — no
 ---
 
 *Built with Terraform 1.10+ · GitHub Actions · AWS EKS, RDS, ECR, VPC, IAM, Secrets Manager*
+
+# Create the bucket
+aws s3api create-bucket \
+  --bucket zen-pharma-terraform-state-chavansb \
+  --region us-east-1
+
+# Enable versioning (allows state rollback)
+aws s3api put-bucket-versioning \
+  --bucket zen-pharma-terraform-state-chavansb \
+  --versioning-configuration Status=Enabled
+
+# Enable encryption
+aws s3api put-bucket-encryption \
+  --bucket zen-pharma-terraform-state-chavansb \
+  --server-side-encryption-configuration '{
+    "Rules": [{
+      "ApplyServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+      }
+    }]
+  }'
+
+# Block all public access
+aws s3api put-public-access-block \
+  --bucket zen-pharma-terraform-state-chavansb \
+  --public-access-block-configuration \
+    "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
