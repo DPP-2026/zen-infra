@@ -68,9 +68,9 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
 }
 
 resource "aws_iam_role" "github_actions_ci" {
-  name               = "${var.project}-${var.env}-github-actions-role"
-  assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role.json
-  max_session_duration = 3600  # 1 hour — enough for any CI job
+  name                 = "${var.project}-${var.env}-github-actions-role"
+  assume_role_policy   = data.aws_iam_policy_document.github_actions_assume_role.json
+  max_session_duration = 3600 # 1 hour — enough for any CI job
 
   tags = {
     Name    = "${var.project}-${var.env}-github-actions-role"
@@ -88,9 +88,9 @@ resource "aws_iam_policy" "github_actions_ci_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "ECRAuth"
-        Effect = "Allow"
-        Action = ["ecr:GetAuthorizationToken"]
+        Sid      = "ECRAuth"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
         Resource = "*"
       },
       {
