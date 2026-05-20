@@ -22,7 +22,7 @@ This guide walks you through setting up the zen-pharma infrastructure on your ow
 11. [Step 8 — Verify the Infrastructure](#11-step-8--verify-the-infrastructure)
 12. [Infrastructure Details](#12-infrastructure-details)
 13. [Day-2 Operations](#13-day-2-operations)
-14. [Destroying Infrastructure](#14-destroying-infrastructure)
+14. [Cluster Cleanup / Destroying Infrastructure](#14-destroying-infrastructure)
 15. [Troubleshooting](#15-troubleshooting)
 
 ---
@@ -448,45 +448,24 @@ terraform init -backend-config=backend.tfvars
 
 > **Why this pattern?** Terraform's `backend` block is evaluated before any variables are loaded, so `var.aws_region` cannot be used there. The `-backend-config` flag injects the region at init time, keeping region in one place without duplicating it in the backend block.
 
-### 7.2 Update GitHub Organisation Variable
+### 7.2 Set Your GitHub Org as a Repository Variable
 
-In `envs/dev/variables.tf`, update the default value for `github_org`:
+The pipeline reads your GitHub username/org from a **GitHub Actions variable** called `GH_ORG`. You do not need to edit any Terraform or workflow files — just set this variable in your fork's settings.
 
-```hcl
-variable "github_org" {
-  description = "GitHub username or organization"
-  type        = string
-  default     = "YOUR-GITHUB-USERNAME"   # ← change this
-}
-```
+Go to your fork on GitHub:
+**Settings → Secrets and variables → Actions → Variables tab → New repository variable**
 
-Do the same in `envs/qa/variables.tf` and `envs/prod/variables.tf`.
+| Variable Name | Value |
+|---|---|
+| `GH_ORG` | Your GitHub username or organization (e.g. `john-smith`) |
 
-### 7.3 Update the GitHub Actions Workflow
+This is used to build the OIDC trust policy so GitHub Actions in your `zen-pharma-frontend` and `zen-pharma-backend` repos can assume the AWS role. If this variable is missing or wrong, OIDC authentication will fail.
 
-In `.github/workflows/terraform.yml`, update the `github_org` value:
-
-```yaml
-- name: Terraform Plan
-  run: |
-    terraform plan \
-      -var="aws_region=${{ env.AWS_REGION }}" \
-      -var="db_password=${{ secrets.DEV_DB_PASSWORD }}" \
-      -var="jwt_secret=${{ secrets.DEV_JWT_SECRET }}" \
-      -var="github_org=YOUR-GITHUB-USERNAME" \    # ← change this
-      -out=tfplan \
-      -no-color
-```
-
-The `aws_region` var is sourced from the `AWS_REGION` env variable at the top of `terraform.yml` — change it there once to update the region everywhere in CI.
-
-### 7.4 Commit and Push Changes
+### 7.3 Commit and Push Changes
 
 ```bash
 git add envs/dev/backend.tf envs/qa/backend.tf envs/prod/backend.tf
-git add envs/dev/variables.tf envs/qa/variables.tf envs/prod/variables.tf
-git add .github/workflows/terraform.yml
-git commit -m "config: update bucket name and github org for my account"
+git commit -m "config: update backend bucket name for my account"
 git push origin main
 ```
 
@@ -499,7 +478,7 @@ The pipeline needs AWS credentials and application secrets to run Terraform. The
 ### 8.1 Add Repository Secrets
 
 Go to your fork on GitHub:
-**Settings → Secrets and variables → Actions → New repository secret**
+**Settings → Secrets and variables → Actions → Secrets tab → New repository secret**
 
 Add the following secrets:
 
@@ -509,6 +488,17 @@ Add the following secrets:
 | `AWS_SECRET_ACCESS_KEY` | Your IAM user secret access key | AWS authentication for Terraform |
 | `DEV_DB_PASSWORD` | A strong password (min 8 chars) | RDS PostgreSQL master password |
 | `DEV_JWT_SECRET` | A long random string | JWT signing secret for the app |
+
+### 8.2 Add Repository Variable
+
+Switch to the **Variables tab** on the same page:
+**Settings → Secrets and variables → Actions → Variables tab → New repository variable**
+
+| Variable Name | Value | Description |
+|---|---|---|
+| `GH_ORG` | Your GitHub username or org (e.g. `john-smith`) | Used in the OIDC trust policy — must match the org that owns `zen-pharma-frontend` and `zen-pharma-backend` |
+
+> **Important**: If `GH_ORG` is not set, the pipeline will apply an empty value and GitHub Actions OIDC authentication in your app repos will fail with `AccessDenied`.
 
 **Generating a strong random secret:**
 ```bash
@@ -817,31 +807,60 @@ terraform plan \
 
 > **Warning**: This permanently deletes all infrastructure including the EKS cluster, RDS database, and all data. There is no undo.
 
-### Via Pipeline (Recommended)
+### Step 1 — Remove the Ingress Resource First (Required)
+
+**Do this before running Terraform destroy.** The NGINX Ingress Controller creates an AWS Network Load Balancer (NLB) that Terraform does not manage. If the NLB still exists when Terraform tries to delete the VPC, the destroy will fail — AWS blocks VPC deletion while resources still reference its subnets.
+
+#### Option A — kubectl (Recommended if cluster is reachable)
+
+```bash
+# Update local kubeconfig first
+aws eks update-kubeconfig --region us-east-1 --name pharma-dev-cluster
+
+# List all ingress resources across all namespaces (note their names)
+kubectl get ingress --all-namespaces
+
+# Delete all ingress resources — removes routing rules from the NLB
+kubectl delete ingress --all --all-namespaces
+
+# Delete the NGINX Ingress Controller service — this triggers AWS to deprovision the NLB
+kubectl delete svc ingress-nginx-controller -n ingress-nginx
+
+# Wait ~2 minutes, then confirm the NLB is gone
+aws elbv2 describe-load-balancers \
+  --query 'LoadBalancers[].{Name:LoadBalancerName,State:State.Code}' \
+  --output table
+```
+
+The NLB is fully gone when the above command returns an empty table or no NLB with a name starting with `k8s-`.
+
+#### Option B — AWS Console (if kubectl is not available)
+
+1. Go to **AWS Console → EC2 → Load Balancers** (left sidebar)
+2. Find the Network Load Balancer for your cluster — it will have a name starting with `k8s-` and be tagged with `kubernetes.io/cluster/pharma-dev-cluster`
+3. Select it → **Actions → Delete load balancer**
+4. Type `confirm` in the confirmation box → click **Delete**
+5. Wait for the load balancer to disappear from the list (refresh the page every 30 seconds)
+6. Also check **EC2 → Target Groups** — delete any target groups tagged with the cluster name that remain after the NLB is gone
+
+---
+
+### Step 2 — Run the Destroy Workflow via GitHub Actions
 
 1. Go to your fork on GitHub → **Actions**
-2. Select **Terraform Infrastructure** workflow
-3. Click **Run workflow**
-4. Set:
+2. Select the **Terraform Infrastructure** workflow (left sidebar)
+3. Click **Run workflow** (top right of the workflow runs list)
+4. Set the inputs:
+   - **Branch**: `main`
    - **Terraform action**: `destroy`
    - **Type "destroy" to confirm**: `destroy`
 5. Click **Run workflow**
-6. The destroy job will pause for approval — review then approve
+6. The destroy job will pause for manual approval — go to the running workflow and click **Review deployments → Approve**
 7. Wait 15–25 minutes for all resources to be deleted
 
-### Locally (Alternative)
+> **Note on ECR repositories**: The destroy workflow will **not** delete your ECR repositories. They are created with `image_tag_mutability = IMMUTABLE` and `force_delete = false`, which prevents accidental deletion. You can safely ignore any Terraform warnings about ECR during destroy — the repositories will remain in your AWS account. Delete them manually from the ECR console if you no longer need them.
 
-```bash
-cd envs/dev
-terraform init -backend-config=backend.tfvars
-terraform destroy \
-  -var="aws_region=us-east-1" \
-  -var="db_password=dummy" \
-  -var="jwt_secret=dummy" \
-  -var="github_org=YOUR-GITHUB-USERNAME"
-```
-
-Type `yes` when prompted.
+---
 
 ### After Destroying
 
