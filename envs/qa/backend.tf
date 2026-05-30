@@ -3,6 +3,6 @@ terraform {
     bucket = "zen-pharma-terraform-state-akshaykumarpnaik12-png"
     key    = "envs/qa/terraform.tfstate"
     encrypt      = true
-    use_lockfile = true   # S3 native locking — requires Terraform 1.10+, no DynamoDB needed
+    use_lockfile = true # S3 native locking — requires Terraform 1.10+, no DynamoDB needed
   }
 }

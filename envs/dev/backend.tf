@@ -5,6 +5,8 @@ terraform {
     bucket = "zen-pharma-terraform-state-akshaykumarpnaik12-png"
     key    = "envs/dev/terraform.tfstate"
     encrypt      = true
-    use_lockfile = true   # S3 native locking
+    use_lockfile = true # S3 native locking
+
   }
 }
+
