@@ -1,5 +1,7 @@
 # zen-infra — Implementation Guide
 
+> **Interview questions** have been consolidated → see [zen-interview-prep](../zen-interview-prep/README.md)
+
 ![Infra Setup](docs/architecture.jpg)
 # Test
 
