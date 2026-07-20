@@ -429,11 +429,13 @@ The IAM role trust policy is scoped to the specific GitHub org:
   "Condition": {
     "StringLike": {
       "token.actions.githubusercontent.com:sub":
-        "repo:your-github-username/zen-pharma-backend:ref:refs/heads/*"
+        "repo:your-github-username@283630436/zen-pharma-backend@1235515471:ref:refs/heads/*"
     }
   }
 }
 ```
+
+> Since 2026-07-15, GitHub enforces immutable `org@id/repo@id` subject claims for new/opted-in repos instead of bare names — this prevents a renamed or recycled repo/org from re-minting a matching token. The org/repo IDs are defined as `locals` in `modules/iam/github-actions-oidc.tf`.
 
 ### IRSA — Pods assume IAM roles without credentials
 

@@ -289,25 +289,33 @@ To verify: go to Actions tab → the workflow should show as skipped with a note
 <details>
 <summary>Expected answer</summary>
 
-In `modules/iam/github-actions-oidc.tf`, the trust policy condition uses `StringLike` on the `sub` claim:
+In `modules/iam/github-actions-oidc.tf`, the trust policy condition uses `StringLike` on the `sub` claim. Since 2026-07-15 GitHub enforces immutable `org@id/repo@id` subject claims (instead of bare names) for new/opted-in repos, so the claim values interpolate a `local.github_repo_id_reporting`-style ID alongside the name:
 
 ```hcl
+locals {
+  github_org_id           = "283630436"  # DPP-2026
+  github_repo_id_frontend = "1235505603" # DPP-2026/zen-pharma-frontend
+  github_repo_id_backend  = "1235515471" # DPP-2026/zen-pharma-backend
+  # Add this line with the new repo's numeric GitHub ID:
+  github_repo_id_reporting = "<repo-id>" # DPP-2026/zen-pharma-reporting
+}
+
 condition {
   test     = "StringLike"
   variable = "token.actions.githubusercontent.com:sub"
   values = [
-    "repo:${var.github_org}/zen-pharma-frontend:ref:refs/heads/main",
-    "repo:${var.github_org}/zen-pharma-frontend:ref:refs/heads/develop",
-    "repo:${var.github_org}/zen-pharma-backend:ref:refs/heads/main",
-    "repo:${var.github_org}/zen-pharma-backend:ref:refs/heads/develop",
+    "repo:${var.github_org}@${local.github_org_id}/zen-pharma-frontend@${local.github_repo_id_frontend}:ref:refs/heads/main",
+    "repo:${var.github_org}@${local.github_org_id}/zen-pharma-frontend@${local.github_repo_id_frontend}:ref:refs/heads/develop",
+    "repo:${var.github_org}@${local.github_org_id}/zen-pharma-backend@${local.github_repo_id_backend}:ref:refs/heads/main",
+    "repo:${var.github_org}@${local.github_org_id}/zen-pharma-backend@${local.github_repo_id_backend}:ref:refs/heads/develop",
     # Add these two lines:
-    "repo:${var.github_org}/zen-pharma-reporting:ref:refs/heads/main",
-    "repo:${var.github_org}/zen-pharma-reporting:ref:refs/heads/develop",
+    "repo:${var.github_org}@${local.github_org_id}/zen-pharma-reporting@${local.github_repo_id_reporting}:ref:refs/heads/main",
+    "repo:${var.github_org}@${local.github_org_id}/zen-pharma-reporting@${local.github_repo_id_reporting}:ref:refs/heads/develop",
   ]
 }
 ```
 
-Open a PR with this change. `terraform plan` will show an update to `aws_iam_role.github_actions_ci` (the trust policy changes). No new resources are created — the existing role now trusts the additional repo. After apply, add the role ARN to the new repo's GitHub Variables and use `aws-actions/configure-aws-credentials` in its workflow.
+The repo's numeric ID can be found via `gh api repos/DPP-2026/zen-pharma-reporting --jq .id`. Open a PR with this change. `terraform plan` will show an update to `aws_iam_role.github_actions_ci` (the trust policy changes). No new resources are created — the existing role now trusts the additional repo. After apply, add the role ARN to the new repo's GitHub Variables and use `aws-actions/configure-aws-credentials` in its workflow.
 
 Note: the permission policy (`ECRPush`) already allows `arn:aws:ecr:*:ACCOUNT:repository/*` — all repos in the account. The trust policy is the real security gate.
 

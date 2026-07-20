@@ -36,6 +36,16 @@ resource "aws_iam_openid_connect_provider" "github_actions" {
   }
 }
 
+# Immutable GitHub org/repo IDs — required by the sub claim format GitHub enforces
+# for new repos (and repos opted in) since 2026-07-15. Using name@id instead of a
+# bare name prevents a renamed/recycled repo or org from re-minting a matching token.
+# See: https://github.blog/changelog/2026-04-23-immutable-subject-claims-for-github-actions-oidc-tokens/
+locals {
+  github_org_id           = "283630436"  # DPP-2026
+  github_repo_id_frontend = "1235505603" # DPP-2026/zen-pharma-frontend
+  github_repo_id_backend  = "1235515471" # DPP-2026/zen-pharma-backend
+}
+
 # Trust policy — restricts which repos and branches can assume this role
 data "aws_iam_policy_document" "github_actions_assume_role" {
   statement {
@@ -58,19 +68,19 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:${var.github_org}/zen-pharma-frontend:ref:refs/heads/main",
-        "repo:${var.github_org}/zen-pharma-frontend:ref:refs/heads/develop",
-        "repo:${var.github_org}/zen-pharma-backend:ref:refs/heads/main",
-        "repo:${var.github_org}/zen-pharma-backend:ref:refs/heads/develop",
+        "repo:${var.github_org}@${local.github_org_id}/zen-pharma-frontend@${local.github_repo_id_frontend}:ref:refs/heads/main",
+        "repo:${var.github_org}@${local.github_org_id}/zen-pharma-frontend@${local.github_repo_id_frontend}:ref:refs/heads/develop",
+        "repo:${var.github_org}@${local.github_org_id}/zen-pharma-backend@${local.github_repo_id_backend}:ref:refs/heads/main",
+        "repo:${var.github_org}@${local.github_org_id}/zen-pharma-backend@${local.github_repo_id_backend}:ref:refs/heads/develop",
       ]
     }
   }
 }
 
 resource "aws_iam_role" "github_actions_ci" {
-  name               = "${var.project}-${var.env}-github-actions-role"
-  assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role.json
-  max_session_duration = 3600  # 1 hour — enough for any CI job
+  name                 = "${var.project}-${var.env}-github-actions-role"
+  assume_role_policy   = data.aws_iam_policy_document.github_actions_assume_role.json
+  max_session_duration = 3600 # 1 hour — enough for any CI job
 
   tags = {
     Name    = "${var.project}-${var.env}-github-actions-role"
@@ -88,9 +98,9 @@ resource "aws_iam_policy" "github_actions_ci_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "ECRAuth"
-        Effect = "Allow"
-        Action = ["ecr:GetAuthorizationToken"]
+        Sid      = "ECRAuth"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
         Resource = "*"
       },
       {
