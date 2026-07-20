@@ -170,7 +170,7 @@ jobs:
         run: terraform init -backend-config=backend.tfvars
 
       - name: Download plan file
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: tfplan-${{ env.TARGET_ENV }}
           path: envs/${{ env.TARGET_ENV }}
@@ -201,7 +201,7 @@ jobs:
         working-directory: envs/${{ github.event.inputs.environment || 'dev' }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Terraform ${{ env.TF_VERSION }}
         uses: hashicorp/setup-terraform@v3
