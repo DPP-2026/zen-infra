@@ -63,7 +63,10 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # Allow both frontend and backend repos; restrict to main and develop branches
+    # Allow both frontend and backend repos; restrict to main and develop branches.
+    # Both immutable-ID and legacy subject-claim formats are listed because immutable
+    # subject claims are opt-in per repo/org — until DPP-2026 enables that setting,
+    # GitHub still mints tokens with the legacy "org/repo" (no @id) sub claim.
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
@@ -72,6 +75,10 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
         "repo:${var.github_org}@${local.github_org_id}/zen-pharma-frontend@${local.github_repo_id_frontend}:ref:refs/heads/develop",
         "repo:${var.github_org}@${local.github_org_id}/zen-pharma-backend@${local.github_repo_id_backend}:ref:refs/heads/main",
         "repo:${var.github_org}@${local.github_org_id}/zen-pharma-backend@${local.github_repo_id_backend}:ref:refs/heads/develop",
+        "repo:${var.github_org}/zen-pharma-frontend:ref:refs/heads/main",
+        "repo:${var.github_org}/zen-pharma-frontend:ref:refs/heads/develop",
+        "repo:${var.github_org}/zen-pharma-backend:ref:refs/heads/main",
+        "repo:${var.github_org}/zen-pharma-backend:ref:refs/heads/develop",
       ]
     }
   }
