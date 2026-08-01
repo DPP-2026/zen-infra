@@ -57,7 +57,7 @@ variable "karpenter_namespace" {
 variable "karpenter_version" {
   description = "Version of the Karpenter Helm chart to install"
   type        = string
-  default     = "1.1.1"
+  default     = "1.11.3"
 }
 
 variable "node_instance_categories" {
