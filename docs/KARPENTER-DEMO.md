@@ -24,6 +24,81 @@ after 1 minute of being empty/underutilized)
 
 ---
 
+## 0.5 Known one-time gotchas (already fixed for pharma-dev, watch for these on a fresh account/cluster)
+
+These bit us running this demo for the first time against `pharma-dev-cluster`. Neither is
+a Terraform bug — both are one-time, account/cluster-level state that Terraform doesn't
+(and largely can't) manage, so they're easy to hit again on a new environment or a
+from-scratch AWS account.
+
+### a) Stale CRDs after a Karpenter version bump
+
+**Symptom:** `EC2NodeClass`/`NodePool` apply fine, but new `NodeClaim`s fail validation
+with something like:
+
+```
+NodeClaim.karpenter.sh "default-xxxxx" is invalid: [spec.requirements[N].operator:
+Unsupported value: "Gte": supported values: "In", "NotIn", "Exists", "DoesNotExist", "Gt", "Lt", ...]
+```
+
+**Cause:** the `karpenter` Helm chart installs CRDs via its `crds/` directory, and Helm's
+`crds/` mechanism only *creates* CRDs if they're absent — it never upgrades an existing
+one on `helm install`/`upgrade`, even across major version bumps. If CRDs were ever
+installed by an older chart version (e.g. an earlier failed attempt), they silently stick
+around and the controller (now running newer code) starts writing fields/enum values the
+stale CRD schema doesn't allow.
+
+**Fix:** reapply the CRDs for the target version directly:
+
+```bash
+KARPENTER_VERSION=1.11.3  # match modules/karpenter/variables.tf karpenter_version
+for f in karpenter.sh_nodepools.yaml karpenter.sh_nodeclaims.yaml karpenter.k8s.aws_ec2nodeclasses.yaml; do
+  kubectl apply -f "https://raw.githubusercontent.com/aws/karpenter-provider-aws/v${KARPENTER_VERSION}/pkg/apis/crds/$f"
+done
+```
+
+Do this any time `karpenter_version` is bumped in a cluster that's had a previous
+Karpenter install attempt (successful or not).
+
+### b) `AWSServiceRoleForEC2Spot` doesn't exist yet
+
+**Symptom:** `NodeClaim`s targeting spot capacity fail to launch with:
+
+```
+AuthFailure.ServiceLinkedRoleCreationNotPermitted: The provided credentials do not have
+permission to create the service-linked role for EC2 Spot Instances.
+```
+
+**Cause:** the very first EC2 Spot request in an AWS account needs the
+`AWSServiceRoleForEC2Spot` service-linked role to exist. AWS normally auto-creates it on
+first use, but the Karpenter controller's scoped IAM policy (deliberately) doesn't include
+`iam:CreateServiceLinkedRole`, so if this account has never launched a spot instance
+before, Karpenter can't create it for itself.
+
+**Fix:** create it once, with any sufficiently-privileged identity (not the Karpenter
+controller role) — it's an account-wide fixture, not per-cluster or per-environment:
+
+```bash
+aws iam create-service-linked-role --aws-service-name spot.amazonaws.com
+```
+
+Safe to run even if it might already exist elsewhere in the account — check first with
+`aws iam get-role --role-name AWSServiceRoleForEC2Spot` if unsure. Not something to add to
+`modules/karpenter` itself: it's a one-time account bootstrap step, and every environment's
+module would otherwise try to create the same account-wide role and collide.
+
+### c) Also worth knowing: this account's on-demand vCPU quota
+
+`pharma-dev`'s EC2 "Running On-Demand Standard (A,C,D,H,I,M,R,T,Z) instances" quota is `8`
+vCPUs — already fully consumed by the 4× `t3.small` managed node group (2 vCPU × 4 = 8).
+That's why the scale-up demo below only succeeds via **spot** capacity; Karpenter will keep
+retrying on-demand launches and failing with `VcpuLimitExceeded` until either this quota is
+raised or the managed node group is scaled down to free headroom. Not a bug — just a sandbox
+account limit worth knowing about before a live demo, since Karpenter's `NodePool` allows both
+`spot` and `on-demand` and will only silently fall back to whichever one actually has room.
+
+---
+
 ## 1. Verify Karpenter is healthy
 
 ```bash
