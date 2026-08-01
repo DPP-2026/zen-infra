@@ -160,6 +160,28 @@ resource "aws_iam_policy" "controller" {
         }
       },
       {
+        # RunInstances/CreateFleet reference an *existing* launch template
+        # (created moments earlier by the statement above) rather than
+        # creating one, so aws:RequestTag never matches here — only
+        # aws:ResourceTag, checked against the tags Karpenter already put
+        # on that launch template.
+        Sid      = "AllowScopedEC2LaunchTemplateAccessActions"
+        Effect   = "Allow"
+        Resource = "arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}:*:launch-template/*"
+        Action = [
+          "ec2:RunInstances",
+          "ec2:CreateFleet",
+        ]
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/kubernetes.io/cluster/${var.cluster_name}" = "owned"
+          }
+          StringLike = {
+            "aws:ResourceTag/karpenter.sh/nodepool" = "*"
+          }
+        }
+      },
+      {
         Sid      = "AllowScopedResourceCreationTagging"
         Effect   = "Allow"
         Resource = "arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}:*:*/*"
