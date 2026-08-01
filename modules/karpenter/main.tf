@@ -17,8 +17,8 @@ locals {
 # private subnets as the managed node group and reuse the cluster SG.
 # =============================================================================
 resource "aws_ec2_tag" "subnet_discovery" {
-  for_each    = toset(var.private_eks_subnet_ids)
-  resource_id = each.value
+  count       = length(var.private_eks_subnet_ids)
+  resource_id = var.private_eks_subnet_ids[count.index]
   key         = "karpenter.sh/discovery"
   value       = var.cluster_name
 }
