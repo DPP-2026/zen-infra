@@ -35,6 +35,13 @@ provider "aws" {
       ManagedBy = "terraform"
     }
   }
+
+  # karpenter.sh/discovery is applied out-of-band by modules/karpenter's
+  # aws_ec2_tag resources; without this, aws_subnet/aws_security_group here
+  # would treat it as drift and strip it back off on every apply.
+  ignore_tags {
+    keys = ["karpenter.sh/discovery"]
+  }
 }
 
 provider "kubernetes" {
