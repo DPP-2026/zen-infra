@@ -74,3 +74,19 @@ module "secrets_manager" {
   db_password = var.db_password
   jwt_secret  = var.jwt_secret
 }
+
+module "karpenter" {
+  source = "../../modules/karpenter"
+
+  project                   = "pharma"
+  env                       = "prod"
+  aws_region                = var.aws_region
+  aws_account_id            = data.aws_caller_identity.current.account_id
+  cluster_name              = module.eks.cluster_name
+  cluster_endpoint          = module.eks.cluster_endpoint
+  oidc_provider_arn         = module.eks.oidc_provider_arn
+  oidc_provider_url         = module.eks.oidc_provider_url
+  private_eks_subnet_ids    = module.vpc.private_eks_subnet_ids
+  cluster_security_group_id = module.eks.cluster_security_group_id
+  cpu_limit                 = 100
+}
