@@ -411,7 +411,10 @@ resource "kubectl_manifest" "ec2_node_class_default" {
     metadata   = { name = "default" }
     spec = {
       amiFamily = "AL2023"
-      role      = aws_iam_role.node.name
+      amiSelectorTerms = [
+        { alias = "al2023@latest" }
+      ]
+      role = aws_iam_role.node.name
       subnetSelectorTerms = [
         { tags = { "karpenter.sh/discovery" = var.cluster_name } }
       ]
