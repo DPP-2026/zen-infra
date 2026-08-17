@@ -6,7 +6,9 @@ locals {
   # Only create repos that don't already exist — a repo created outside this
   # module (or left behind by a prior partial apply) is adopted as-is rather
   # than recreated, so its images and settings aren't touched.
-  new_repositories = setsubtract(toset(var.repositories), toset(data.aws_ecr_repositories.existing.names))
+  new_repositories = setsubtract(
+    toset(var.repositories),
+    toset(try(data.aws_ecr_repositories.existing.names, []))
 
   # Covers every repo in var.repositories, not just the ones this module
   # created, so consumers of repository_urls see pre-existing repos too.
